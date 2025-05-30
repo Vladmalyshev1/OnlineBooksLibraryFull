@@ -1,0 +1,104 @@
+/* navbar.css */
+
+.navbar-custom {
+  background-color: #ffffff; /* Белый фон */
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); /* Легкая тень */
+  padding: 0.5rem 0;
+}
+
+.navbar-brand-custom h1 {
+  color: #1a237e; /* Темно-синий текст */
+  font-size: 1.8rem;
+  font-weight: 600;
+  margin: 0;
+  padding: 0;
+  transition: color 0.3s ease;
+}
+
+.navbar-brand-custom h1:hover {
+  color: #3949ab; /* Синий при наведении */
+}
+
+.navbar-link-custom {
+  color: #1a237e !important; /* Темно-синий текст */
+  font-size: 1.1rem;
+  font-weight: 500;
+  margin: 0 0.5rem;
+  padding: 0.5rem 1rem;
+  transition: all 0.3s ease;
+  border-radius: 4px;
+}
+
+.navbar-link-custom:hover {
+  color: #303f9f !important; /* Темно-синий при наведении */
+  background-color: #f5f5f5; /* Светло-серый фон при наведении */
+  text-decoration: none;
+}
+
+.logina {
+  background-color: #1a237e; /* Темно-синий фон кнопки */
+  color: white !important; /* Белый текст */
+  border-radius: 4px;
+  margin-left: 0.5rem !important;
+}
+
+.logina:hover {
+  background-color: #303f9f !important; /* Темнее при наведении */
+  color: white !important;
+}
+
+.search-form {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 500px;
+}
+
+.search-input {
+  background-color: #f5f5f5; /* Светло-серый фон */
+  border: 1px solid #e0e0e0;
+  border-radius: 4px 0 0 4px;
+  padding: 0.6rem 1rem;
+  width: 100%;
+  color: #1a237e; /* Темно-синий текст */
+}
+
+.search-input:focus {
+  box-shadow: none;
+  border-color: #3949ab; /* Синяя рамка при фокусе */
+}
+
+.search-button {
+  background-color: #1a237e; /* Темно-синий фон */
+  border: none;
+  border-radius: 0 4px 4px 0;
+  padding: 0.6rem 1.2rem;
+  transition: background-color 0.3s ease;
+  color: white;
+}
+
+.search-button:hover {
+  background-color: #303f9f; /* Темнее при наведении */
+}
+
+/* Адаптация для мобильных устройств */
+@media (max-width: 992px) {
+  .navbar-brand-custom h1 {
+    font-size: 1.5rem;
+  }
+  
+  .search-form {
+    margin: 1rem 0;
+  }
+  
+  .navbar-link-custom {
+    margin: 0.2rem 0;
+    text-align: center;
+  }
+  
+  .logina {
+    margin: 0.5rem auto !important;
+    display: block;
+    width: fit-content;
+  }
+}
