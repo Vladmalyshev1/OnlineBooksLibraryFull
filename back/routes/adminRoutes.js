@@ -52,50 +52,6 @@ router.get('/users', verifyAccessToken, isAdmin, async (req, res) => {
 });
 
 
-
-/**
- * @swagger
- * /api/admin/users/{id}:
- *   delete:
- *     summary: Удалить пользователя (только для админов)
- *     tags: [Admin]
- *     security:
- *       - cookieAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: ID пользователя
- *     responses:
- *       200:
- *         description: Пользователь удален
- *       404:
- *         description: Пользователь не найден
- *       403:
- *         description: Доступ запрещен
- *       500:
- *         description: Ошибка сервера
- */
-router.delete('/users/:id', verifyAccessToken, isAdmin, async (req, res) => {
-  try {
-    const deletedUser = await User.destroy({
-      where: { id: req.params.id }
-    });
-    
-    if (deletedUser) {
-      res.json({ message: 'User deleted' });
-    } else {
-      res.status(404).json({ message: 'User not found' });
-    }
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-
-
 /**
  * @swagger
  * /api/admin/summary:

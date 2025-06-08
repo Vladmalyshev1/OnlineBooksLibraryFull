@@ -32,9 +32,6 @@ const User = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: false
     },
-    profileImage: {
-      type: DataTypes.STRING
-    },
     role: {
       type: DataTypes.ENUM('user', 'admin'),
       defaultValue: 'user'

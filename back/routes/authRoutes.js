@@ -6,12 +6,6 @@ const router = express.Router();
 const { verifyAccessToken, verifyRefreshToken } = require('../middelware/jwt');
 const { User } = require('../models');
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
-
 const generateTokens = (user) => {
   const accessToken = jwt.sign(
     { id: user.id, role: user.role },
@@ -34,34 +28,6 @@ const generateTokens = (user) => {
  *   name: Auth
  *   description: Authentication endpoints
  */
-
-/**
- * @swagger
- * /auth/signature:
- *   get:
- *     summary: Get Cloudinary upload signature
- *     tags: [Auth]
- *     responses:
- *       200:
- *         description: Returns timestamp and signature for Cloudinary upload
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 timestamp:
- *                   type: number
- *                 signature:
- *                   type: string
- */
-router.get('/signature', (req, res) => {
-  const timestamp = Math.round((new Date).getTime() / 1000);
-  const signature = cloudinary.utils.api_sign_request({
-    timestamp: timestamp,
-    folder: 'user_uploads'
-  }, cloudinary.config().api_secret);
-  res.json({ timestamp, signature });
-});
 
 /**
  * @swagger
@@ -318,8 +284,6 @@ router.get('/profile', verifyAccessToken, async (req, res) => {
  *                 type: string
  *               country:
  *                 type: string
- *               profileImage:
- *                 type: string
  *     responses:
  *       200:
  *         description: Profile updated successfully
@@ -331,7 +295,7 @@ router.get('/profile', verifyAccessToken, async (req, res) => {
  *         description: Server error
  */
 router.put('/profile', verifyAccessToken, async (req, res) => {
-  const { username, phone, address, country, profileImage } = req.body;
+  const { username, phone, address, country} = req.body;
 
   try {
     let user = await User.findByPk(req.user.id);
@@ -343,7 +307,6 @@ router.put('/profile', verifyAccessToken, async (req, res) => {
     user.phone = phone || user.phone;
     user.address = address || user.address;
     user.country = country || user.country;
-    user.profileImage = profileImage || user.profileImage;
 
     await user.save();
     res.json(user);
@@ -364,7 +327,7 @@ router.put('/profile', verifyAccessToken, async (req, res) => {
  *       500:
  *         description: Server error
  */
-router.get('/logout', verifyRefreshToken, async (req, res) => {
+router.get('/logout', verifyAccessToken, async (req, res) => {
   try {
     const user = await User.findByPk(req.user.id);
     if (user) {
@@ -433,8 +396,6 @@ router.post('/check_authenticateToken', verifyAccessToken, async (req, res) => {
  *         address:
  *           type: string
  *         country:
- *           type: string
- *         profileImage:
  *           type: string
  *         role:
  *           type: string
