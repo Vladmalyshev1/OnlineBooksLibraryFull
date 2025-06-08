@@ -38,6 +38,9 @@ const User = (sequelize) => {
     role: {
       type: DataTypes.ENUM('user', 'admin'),
       defaultValue: 'user'
+    },
+    refreshToken: {
+      type: DataTypes.STRING
     }
   }, {
     tableName: 'users',
@@ -46,4 +49,5 @@ const User = (sequelize) => {
     updatedAt: false
   });
 };
+
 module.exports = User;

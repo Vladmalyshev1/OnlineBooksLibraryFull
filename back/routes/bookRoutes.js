@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { Book } = require('../models');
-const { jwtMiddleware } = require('../middelware/jwt');
+const { verifyAccessToken } = require('../middelware/jwt');
 const { Op } = require('sequelize');
 
 /**
@@ -242,7 +242,7 @@ router.get('/search', async (req, res) => {
  *       500:
  *         description: Ошибка сервера
  */
-router.get('/user-books', jwtMiddleware, async (req, res) => {
+router.get('/user-books', verifyAccessToken, async (req, res) => {
   try {
     const books = await Book.findAll({ 
       where: { id_client: req.user.id } 

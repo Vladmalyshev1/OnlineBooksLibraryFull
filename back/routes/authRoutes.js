@@ -3,24 +3,56 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cloudinary = require('cloudinary').v2;
 const router = express.Router();
-const { jwtMiddleware } = require('../middelware/jwt');
+const { verifyAccessToken, verifyRefreshToken } = require('../middelware/jwt');
 const { User } = require('../models');
 
 cloudinary.config({
-  cloud_name: 'djux9krem',
-  api_key: '639144162891629',
-  api_secret: 'cqldqET6lDIs4iM9WAkf5DV4Adg'
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
 });
+
+const generateTokens = (user) => {
+  const accessToken = jwt.sign(
+    { id: user.id, role: user.role },
+    process.env.ACCESS_TOKEN_SECRET,
+    { expiresIn: '15m' }
+  );
+  
+  const refreshToken = jwt.sign(
+    { id: user.id },
+    process.env.REFRESH_TOKEN_SECRET,
+    { expiresIn: '7d' }
+  );
+  
+  return { accessToken, refreshToken };
+};
 
 /**
  * @swagger
- * /signature:
+ * tags:
+ *   name: Auth
+ *   description: Authentication endpoints
+ */
+
+/**
+ * @swagger
+ * /auth/signature:
  *   get:
- *     summary: Получить подпись для загрузки на Cloudinary
+ *     summary: Get Cloudinary upload signature
  *     tags: [Auth]
  *     responses:
  *       200:
- *         description: Возвращает timestamp и signature
+ *         description: Returns timestamp and signature for Cloudinary upload
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 timestamp:
+ *                   type: number
+ *                 signature:
+ *                   type: string
  */
 router.get('/signature', (req, res) => {
   const timestamp = Math.round((new Date).getTime() / 1000);
@@ -33,9 +65,9 @@ router.get('/signature', (req, res) => {
 
 /**
  * @swagger
- * /signup:
+ * /auth/signup:
  *   post:
- *     summary: Регистрация нового пользователя
+ *     summary: Register a new user
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -43,16 +75,27 @@ router.get('/signature', (req, res) => {
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - username
+ *               - email
+ *               - password
  *             properties:
  *               username:
  *                 type: string
  *               email:
  *                 type: string
+ *                 format: email
  *               password:
  *                 type: string
+ *                 format: password
+ *                 minLength: 6
  *     responses:
  *       201:
- *         description: Пользователь успешно создан
+ *         description: User created successfully
+ *       400:
+ *         description: User already exists
+ *       500:
+ *         description: Server error
  */
 router.post('/signup', async (req, res) => {
   const { username, email, password } = req.body;
@@ -64,7 +107,7 @@ router.post('/signup', async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = await User.create({
+    await User.create({
       username,
       email,
       password: hashedPassword
@@ -78,9 +121,9 @@ router.post('/signup', async (req, res) => {
 
 /**
  * @swagger
- * /signin:
+ * /auth/signin:
  *   post:
- *     summary: Вход пользователя
+ *     summary: Authenticate user
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -88,14 +131,19 @@ router.post('/signup', async (req, res) => {
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - email
+ *               - password
  *             properties:
  *               email:
  *                 type: string
+ *                 format: email
  *               password:
  *                 type: string
+ *                 format: password
  *     responses:
  *       200:
- *         description: Вход успешен
+ *         description: Successfully authenticated
  *         content:
  *           application/json:
  *             schema:
@@ -103,10 +151,20 @@ router.post('/signup', async (req, res) => {
  *               properties:
  *                 message:
  *                   type: string
- *                 token:
+ *                 accessToken:
  *                   type: string
  *                 role:
  *                   type: string
+ *                   enum: [user, admin]
+ *         headers:
+ *           Set-Cookie:
+ *             schema:
+ *               type: string
+ *               example: accessToken=abcde12345; Path=/; HttpOnly
+ *       400:
+ *         description: Invalid credentials
+ *       500:
+ *         description: Server error
  */
 router.post('/signin', async (req, res) => {
   const { email, password } = req.body;
@@ -122,17 +180,23 @@ router.post('/signin', async (req, res) => {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
-    const token = jwt.sign(
-      { id: user.id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '1w' }
-    );
-
-    res.cookie('token', token, { httpOnly: true });
+    const { accessToken, refreshToken } = generateTokens(user);
+    
+    await user.update({ refreshToken });
+    
+    res.cookie('accessToken', accessToken, { 
+      httpOnly: true,
+      maxAge: 15 * 60 * 1000
+    });
+    
+    res.cookie('refreshToken', refreshToken, { 
+      httpOnly: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
 
     res.status(200).json({
       message: `${user.role === 'admin' ? 'Admin' : 'User'} signed in successfully`,
-      token: token,
+      accessToken,
       role: user.role
     });
   } catch (error) {
@@ -143,21 +207,82 @@ router.post('/signin', async (req, res) => {
 
 /**
  * @swagger
- * /profile:
- *   get:
- *     summary: Получить профиль пользователя
+ * /auth/refresh:
+ *   post:
+ *     summary: Refresh access token
  *     tags: [Auth]
- *     security:
- *       - cookieAuth: []
  *     responses:
  *       200:
- *         description: Информация о пользователе
+ *         description: Tokens refreshed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 accessToken:
+ *                   type: string
+ *         headers:
+ *           Set-Cookie:
+ *             schema:
+ *               type: string
+ *               example: accessToken=abcde12345; Path=/; HttpOnly
+ *       401:
+ *         description: No refresh token
+ *       403:
+ *         description: Invalid refresh token
+ *       500:
+ *         description: Server error
+ */
+router.post('/refresh', verifyRefreshToken, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id);
+    if (!user) {
+      return res.status(404).json({ msg: 'User not found' });
+    }
+    
+    const { accessToken, refreshToken } = generateTokens(user);
+    
+    await user.update({ refreshToken });
+    
+    res.cookie('accessToken', accessToken, { 
+      httpOnly: true,
+      maxAge: 15 * 60 * 1000
+    });
+    
+    res.cookie('refreshToken', refreshToken, { 
+      httpOnly: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
+    res.json({ accessToken });
+  } catch (err) {
+    res.status(500).json({ message: 'Server Error', error: err.message });
+  }
+});
+
+/**
+ * @swagger
+ * /auth/profile:
+ *   get:
+ *     summary: Get user profile
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: User profile data
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/User'
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Server error
  */
-router.get('/profile', jwtMiddleware, async (req, res) => {
+router.get('/profile', verifyAccessToken, async (req, res) => {
   try {
     const user = await User.findByPk(req.user.id, {
       attributes: { exclude: ['password'] }
@@ -173,12 +298,12 @@ router.get('/profile', jwtMiddleware, async (req, res) => {
 
 /**
  * @swagger
- * /profile:
+ * /auth/profile:
  *   put:
- *     summary: Обновить профиль пользователя
+ *     summary: Update user profile
  *     tags: [Auth]
  *     security:
- *       - cookieAuth: []
+ *       - bearerAuth: []
  *     requestBody:
  *       content:
  *         application/json:
@@ -197,9 +322,15 @@ router.get('/profile', jwtMiddleware, async (req, res) => {
  *                 type: string
  *     responses:
  *       200:
- *         description: Профиль успешно обновлён
+ *         description: Profile updated successfully
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Server error
  */
-router.put('/profile', jwtMiddleware, async (req, res) => {
+router.put('/profile', verifyAccessToken, async (req, res) => {
   const { username, phone, address, country, profileImage } = req.body;
 
   try {
@@ -223,30 +354,43 @@ router.put('/profile', jwtMiddleware, async (req, res) => {
 
 /**
  * @swagger
- * /logout:
+ * /auth/logout:
  *   get:
- *     summary: Выход из аккаунта
+ *     summary: Logout user
  *     tags: [Auth]
  *     responses:
  *       200:
- *         description: Успешный выход
+ *         description: Logged out successfully
+ *       500:
+ *         description: Server error
  */
-router.get('/logout', (req, res) => {
-  res.clearCookie('token');
-  res.status(200).json({ message: 'Logged out successfully' });
+router.get('/logout', verifyRefreshToken, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id);
+    if (user) {
+      await user.update({ refreshToken: null });
+    }
+    
+    res.clearCookie('accessToken');
+    res.clearCookie('refreshToken');
+    
+    res.status(200).json({ message: 'Logged out successfully' });
+  } catch (err) {
+    res.status(500).json({ message: 'Server Error', error: err.message });
+  }
 });
 
 /**
  * @swagger
- * /check_authenticateToken:
+ * /auth/check_authenticateToken:
  *   post:
- *     summary: Проверить токен авторизации
+ *     summary: Check authentication token
  *     tags: [Auth]
  *     security:
- *       - cookieAuth: []
+ *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Пользователь авторизован
+ *         description: Token is valid
  *         content:
  *           application/json:
  *             schema:
@@ -254,8 +398,12 @@ router.get('/logout', (req, res) => {
  *               properties:
  *                 user:
  *                   $ref: '#/components/schemas/User'
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
  */
-router.post('/check_authenticateToken', jwtMiddleware, async (req, res) => {
+router.post('/check_authenticateToken', verifyAccessToken, async (req, res) => {
   try {
     const user = await User.findByPk(req.user.id, {
       attributes: { exclude: ['password'] }
@@ -265,5 +413,37 @@ router.post('/check_authenticateToken', jwtMiddleware, async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     User:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: integer
+ *         username:
+ *           type: string
+ *         email:
+ *           type: string
+ *           format: email
+ *         phone:
+ *           type: string
+ *         address:
+ *           type: string
+ *         country:
+ *           type: string
+ *         profileImage:
+ *           type: string
+ *         role:
+ *           type: string
+ *           enum: [user, admin]
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ */
 
 module.exports = router;

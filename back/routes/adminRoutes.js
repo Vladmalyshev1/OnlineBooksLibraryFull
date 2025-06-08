@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { User, Book } = require('../models');
-const { jwtMiddleware } = require('../middelware/jwt');
+const { verifyAccessToken } = require('../middelware/jwt');
 
 const isAdmin = (req, res, next) => {
   if (req.user && req.user.role === 'admin') {
@@ -40,7 +40,7 @@ const isAdmin = (req, res, next) => {
  *       500:
  *         description: Ошибка сервера
  */
-router.get('/users', jwtMiddleware, isAdmin, async (req, res) => {
+router.get('/users', verifyAccessToken, isAdmin, async (req, res) => {
   try {
     const users = await User.findAll({
       attributes: { exclude: ['password'] }
@@ -78,7 +78,7 @@ router.get('/users', jwtMiddleware, isAdmin, async (req, res) => {
  *       500:
  *         description: Ошибка сервера
  */
-router.delete('/users/:id', jwtMiddleware, isAdmin, async (req, res) => {
+router.delete('/users/:id', verifyAccessToken, isAdmin, async (req, res) => {
   try {
     const deletedUser = await User.destroy({
       where: { id: req.params.id }
@@ -123,7 +123,7 @@ router.delete('/users/:id', jwtMiddleware, isAdmin, async (req, res) => {
  *       500:
  *         description: Ошибка сервера
  */
-router.get('/summary', jwtMiddleware, isAdmin, async (req, res) => {
+router.get('/summary', verifyAccessToken, isAdmin, async (req, res) => {
   try {
     const totalBooks = await Book.count();
     const totalUsers = await User.count();
